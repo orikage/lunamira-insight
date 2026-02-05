@@ -65,6 +65,11 @@ export class LunamiraDB {
     return query.get({ $id: id }) as Source | null;
   }
 
+  getAllSources(): Source[] {
+    const query = this.db.query("SELECT * FROM sources");
+    return query.all() as Source[];
+  }
+
   // Articles
   insertArticle(article: Article): number {
     const query = this.db.query(`
@@ -88,6 +93,11 @@ export class LunamiraDB {
   getArticle(id: number): Article | null {
     const query = this.db.query("SELECT * FROM articles WHERE id = $id");
     return query.get({ $id: id }) as Article | null;
+  }
+
+  getArticleByUrl(url: string): Article | null {
+    const query = this.db.query("SELECT * FROM articles WHERE url = $url");
+    return query.get({ $url: url }) as Article | null;
   }
 
   // Tech Trends
