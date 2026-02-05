@@ -27,4 +27,15 @@ CREATE TABLE IF NOT EXISTS tech_trends (
     heat_score REAL DEFAULT 0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- インテリジェンススコア
+CREATE TABLE IF NOT EXISTS scores (
+    article_id INTEGER PRIMARY KEY,
+    technical_density INTEGER,
+    trend_fit INTEGER,
+    total_score INTEGER,
+    explanation TEXT,
+    analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(article_id) REFERENCES articles(id)
+);
 `;

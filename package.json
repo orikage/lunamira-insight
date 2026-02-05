@@ -6,6 +6,7 @@
     "start": "bun run src/index.tsx"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "hono": "^4.0.0",
     "rss-parser": "^3.13.0"
   },

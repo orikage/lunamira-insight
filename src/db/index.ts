@@ -26,6 +26,15 @@ export interface TechTrend {
   updated_at?: string;
 }
 
+export interface ArticleScore {
+  article_id: number;
+  technical_density: number;
+  trend_fit: number;
+  total_score: number;
+  explanation: string; // JSON string
+  analyzed_at?: string;
+}
+
 export class LunamiraDB {
   private db: Database;
 
@@ -118,5 +127,42 @@ export class LunamiraDB {
   getTrend(keyword: string): TechTrend | null {
     const query = this.db.query("SELECT * FROM tech_trends WHERE keyword = $keyword");
     return query.get({ $keyword: keyword }) as TechTrend | null;
+  }
+
+  getAllTrends(): TechTrend[] {
+    const query = this.db.query("SELECT * FROM tech_trends ORDER BY heat_score DESC");
+    return query.all() as TechTrend[];
+  }
+
+  // Intelligence / Scores
+  getUnscoredArticles(limit: number = 10): Article[] {
+    const query = this.db.query(`
+      SELECT a.* FROM articles a
+      LEFT JOIN scores s ON a.id = s.article_id
+      WHERE s.article_id IS NULL
+      ORDER BY a.published_at DESC
+      LIMIT $limit
+    `);
+    return query.all({ $limit: limit }) as Article[];
+  }
+
+  insertScore(score: ArticleScore) {
+    const query = this.db.query(`
+      INSERT INTO scores (article_id, technical_density, trend_fit, total_score, explanation, analyzed_at)
+      VALUES ($article_id, $technical_density, $trend_fit, $total_score, $explanation, CURRENT_TIMESTAMP)
+      ON CONFLICT(article_id) DO UPDATE SET
+        technical_density = excluded.technical_density,
+        trend_fit = excluded.trend_fit,
+        total_score = excluded.total_score,
+        explanation = excluded.explanation,
+        analyzed_at = CURRENT_TIMESTAMP
+    `);
+    query.run({
+      $article_id: score.article_id,
+      $technical_density: score.technical_density,
+      $trend_fit: score.trend_fit,
+      $total_score: score.total_score,
+      $explanation: score.explanation,
+    });
   }
 }
