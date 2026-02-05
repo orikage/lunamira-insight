@@ -165,4 +165,25 @@ export class LunamiraDB {
       $explanation: score.explanation,
     });
   }
+
+  getTopScoredArticles(limit: number = 50, sourceId?: number): (Article & ArticleScore & { source_name: string })[] {
+    let sql = `
+      SELECT a.*, s.technical_density, s.trend_fit, s.total_score, s.explanation, s.analyzed_at, src.name as source_name
+      FROM articles a
+      JOIN scores s ON a.id = s.article_id
+      LEFT JOIN sources src ON a.source_id = src.id
+    `;
+
+    const params: any = { $limit: limit };
+
+    if (sourceId !== undefined) {
+      sql += ` WHERE a.source_id = $source_id`;
+      params.$source_id = sourceId;
+    }
+
+    sql += ` ORDER BY s.total_score DESC LIMIT $limit`;
+
+    const query = this.db.query(sql);
+    return query.all(params) as any;
+  }
 }
