@@ -1,0 +1,14 @@
+{
+  "name": "lunamira-insight",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "bun run --hot src/index.tsx",
+    "start": "bun run src/index.tsx"
+  },
+  "dependencies": {
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

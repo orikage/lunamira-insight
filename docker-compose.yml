@@ -1,0 +1,9 @@
+services:
+  web:
+    build: .
+    ports:
+      - "3005:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production

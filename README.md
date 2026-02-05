@@ -1,15 +1,17 @@
-# Lunamira Insight v5.0: Technical Specification (Revised)
+# Lunamira Insight v5.0: Technical Specification (Revised v2)
 
 **Version:** 5.0.0
 **Date:** 2026-02-05
-**Target System:** Local Low-Spec Server / SQLite / SSG
+**Runtime:** Bun
+**Framework:** Hono
+**Target System:** Local Low-Spec Server / Docker / SQLite
 
 ---
 
 ## 1. システム概要 & アーキテクチャ
 
-Lunamira Insight v5.0は、静的ビルド(SSG)とローカル**SQLite**を中心とした、高効率・低レイテンシな技術情報キュレーションプラットフォームです。
-過度なパーソナライズ（ユーザーの個人的なツイートからの推論）を廃止し、**「技術コミュニティ全体の流れ（Twitter Flow）」**と**「信頼できるソース」**を統合して客観的な技術ニュースを提供します。
+Lunamira Insight v5.0は、**Bun × Hono** を核とした超軽量・高密度な技術情報キュレーションプラットフォームです。
+Next.js などの重厚なフレームワークを排し、Proxmox/Docker 環境のリソースを最小限に抑えつつ、ミリ秒単位の応答速度とタクティカルな UI 体験を実現します。
 
 ### 1.1 アーキテクチャ図 (Data Flow)
 
@@ -21,23 +23,24 @@ graph TD
         TW_FLOW[Twitter Tech Flow (Search/Trending)]
     end
 
-    subgraph "Ingestion Layer (Python)"
-        Crawler[Async Crawler Engine]
-        FlowParser[Tech Trend Analyzer]
+    subgraph "Backend Engine (Python/Bun)"
+        Crawler[Async Crawler Engine - Python]
+        FlowParser[Tech Trend Analyzer - Python]
     end
 
     subgraph "Storage Layer (SQLite)"
         DB[(LunamiraDB.sqlite)]
     end
 
-    subgraph "Intelligence Layer (Python/Gemini)"
+    subgraph "Application Layer (Hono on Bun)"
+        Server[Hono Web Server]
         Scorer[Quality Scoring Engine]
         Gemini[Gemini 3 Pro API]
     end
 
-    subgraph "Presentation Layer (Node.js)"
-        SSG[Next.js Builder]
+    subgraph "Presentation Layer (Hono/JSX)"
         UI[Tactical Dashboard UI]
+        Styles[Tailwind CSS]
     end
 
     RSS --> Crawler
@@ -47,23 +50,39 @@ graph TD
     Crawler -->|Raw Metadata| DB
     FlowParser -->|Market Trend Indicators| DB
 
-    DB --> Scorer
-    Scorer -->|Filtering/Ranking| DB
-
-    DB --> SSG
-    SSG -->|Static HTML/JS| UI
+    DB --> Server
+    Server --> Scorer
+    Scorer -->|Filtering/Ranking| Gemini
+    Gemini --> Scorer
+    
+    Server --> UI
+    UI -->|Rendered HTML| Client[Master Browser]
 ```
 
 ### 1.2 コアコンセプト
-1.  **Local-First & Static:** サーバーサイドでの動的レンダリングを廃止。全てを静的ファイルとして配信し、サーバー負荷を極限まで下げる。
-2.  **SQLite Focused:** データベースはSQLite一段に絞り、複雑な外部DB（Vector DB等）は使用しない。
-3.  **Community-Driven Curation:** マスター個人の発言ではなく、Twitter上の著名な技術アカウントや活発な技術トピックから「今のエンジニア界隈の熱気」を抽出し、キュレーションに反映させる。
+1.  **Hono × Bun × Docker:** 2026年の最軽量スタック。Node.jsより高速な実行環境（Bun）と、シンプルで型安全なエンジン（Hono）を採用。
+2.  **SQLite Centric:** 全ての永続データをSQLiteで管理。ファイル1つでバックアップ可能。
+3.  **No-JS UI (Partial Hydration):** クライアント側のJavaScriptを最小限にし、サーバー側でJSXを高速レンダリング。低スペック環境での快適さを追求。
+4.  **Community-Driven Curation:** Twitter上の著名アカウントや技術トレンドから「エンジニア界隈の熱気」を抽出し、客観的なキュレーションを行う。
 
 ---
 
-## 2. データベース物理設計 (SQLite)
+## 2. 技術スタック
 
-### 2.1 テーブル定義
+| レイヤー | 採用技術 | 役割 |
+|---|---|---|
+| **Runtime** | Bun | 高速実行環境。TS直接実行、パッケージ管理。 |
+| **Framework** | Hono | メインエンジン。ルーティング、API、JSX生成。 |
+| **UI System** | Hono/JSX + Tailwind CSS | コンポーネント開発とスタイリング。 |
+| **Database** | SQLite (Better-SQLite3 / Bun:sqlite) | 記事・履歴・トレンドの永続化。 |
+| **Infrastructure** | Docker | パッケージングと環境の分離。 |
+| **Intelligence** | Gemini 3 Pro | 記事の品質フィルタリングと要約。 |
+
+---
+
+## 3. データベース物理設計 (SQLite)
+
+### 3.1 テーブル定義
 
 ```sql
 -- 収集ソース
@@ -83,7 +102,7 @@ CREATE TABLE articles (
     summary TEXT,
     published_at DATETIME NOT NULL,
     type TEXT CHECK(type IN ('rss', 'tweet', 'api')),
-    content_hash TEXT, -- 重複排除用
+    content_hash TEXT,
     is_reported INTEGER DEFAULT 0,
     FOREIGN KEY(source_id) REFERENCES sources(id)
 );
@@ -98,28 +117,17 @@ CREATE TABLE tech_trends (
 
 ---
 
-## 3. インテリジェンス層 (アルゴリズム)
-
-### 3.1 重複排除
--   **URL・タイトルハッシュ一致:** 同一情報の再表示を完全にブロック。
-
-### 3.2 スコアリング
--   **Community Heat:** Twitter等で話題になっているキーワードを含む記事に加点。
--   **Freshness:** 公開日時が新しいものを優先。
--   **Quality Filter:** Gemini 3 Proが「中身のないポエム記事」を自動で低スコア化。
-
----
-
 ## 4. フロントエンド (Tactical UI)
 
 コンセプト: **「アークナイツ・エンドフィールド」風 タクティカル・ブルータリズム**
 
 ### 4.1 デザイン原則
 -   **Colors:** Background `#0a0a0a`, Primary `#e2ff00` (Acid Lime), Secondary `#00f0ff` (Cyan)
--   **UI演出:** グリッチ効果、HUDステータス表示、タイプライター風要約表示
+-   **Typography:** `JetBrains Mono`
+-   **演出:** Hono/JSXによる高速表示。CSSアニメーションによるグリッチ演出、HUDステータス表示。
 
 ---
 
 ## 5. 運用プラン
--   **Cron:** 毎時実行。バックエンド処理 → SSGビルド → デプロイのサイクルを完結。
--   **Persistence:** `news-state.json` および SQLite により永続的な既読管理を実現。
+-   **Docker Compose:** Webサーバー、クローラ、DBを統合管理。
+-   **Deployment:** Cloudflare Tunnel を通じた安全な外部公開（任意）。
